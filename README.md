@@ -18,6 +18,7 @@ Installation:
    - sudo nano /etc/rc.local
    - Add: python /home/pi/.../energy-monitor.py where ... is the location of your file.
 - Edit connections and/or resistor values and/or component settings to define your system hardware. The defaults match my hardware.
+- Edit calibration values to ensure that your system is accurate. I used an adjustable 12V PSU and 21W car bulb to set the calibration points.
     
 Recommendations (to make life easier):
 - Set a [static IP address](https://www.modmypi.com/blog/tutorial-how-to-give-your-raspberry-pi-a-static-ip-address).
@@ -30,6 +31,16 @@ Recommendations (to make life easier):
 See wiki.
 
 ## Changelog
+
+### V0.3
+
+Added web display of voltage and current
+Added zero current setting
+Added calibration of voltage and current
+
+### V0.2
+
+Added measurement of current
 
 ### V0.1
 Initial trial code.
