@@ -7,8 +7,6 @@ import spidev
 import time
 from flask import Flask, render_template, request
 import datetime
-import os
-import csv
 import RPi.GPIO as GPIO
 import threading
 
@@ -50,11 +48,6 @@ GPIO.output(relay_pin, GPIO.LOW)
 title = "Battery energy monitor"
 status = "Off"
 duration = 0
-
-# Logging
-log_file = "Yes" # Yes to log to a CSV file. Any other value to not log
-# Find directory of the program
-dir = os.path.dirname(os.path.abspath(__file__))
 
 # Create SPI
 spi = spidev.SpiDev()
@@ -171,20 +164,6 @@ class EnergyThread ( threading.Thread ):
           # Work out how much energy until the battery is discharged
           
           start = datetime.datetime.now()
-          if log_file == "Yes":
-              filetime = start.strftime("%Y-%m-%d-%H-%M")
-              filename=dir+'/logging/'+filetime+'_energy_log.csv'
-              with open(filename, 'ab') as csvfile:
-                   # Create a header row in a CSV file
-                   logfile = csv.writer(csvfile, delimiter=',', quotechar='"')
-                   row = ["Date-Time"] # Key parameters from web display
-                   row.append("Voltage")
-                   row.append("Current")
-                   row.append("Energy")
-                   row.append("Interval") # Diagnostics
-                   row.append("Interval Energy")
-                   logfile.writerow(row)
-
           energy = 0 # Reset the energy count each time
           last = start # Start the interval time count
           time.sleep(delay)
@@ -194,28 +173,13 @@ class EnergyThread ( threading.Thread ):
               now = datetime.datetime.now()
               interval = now-last
               interval_secs = interval.total_seconds() # Work out how long since the last measurement
-              current_now = current()
-              interval_energy = current_now * interval_secs / 3600
-              energy = energy + interval_energy # Add the energy (ampere-hours) since in the last interval
+              energy = energy + (current() * interval_secs / 3600) # Add the energy (ampere-hours) since in the last interval
 
               duration = now-start # Work out how long the discharge has been going
               last = now
-              voltage_now = voltage()
-              if voltage_now < minimum_battery_voltage:
+              if voltage() < minimum_battery_voltage:
                   status = "Off"
                   GPIO.output(relay_pin, GPIO.LOW)
-              if log_file == "Yes":
-                  with open(filename, 'ab') as csvfile:
-                        logfile = csv.writer(csvfile, delimiter=',', quotechar='"')
-                        row = [now.strftime("%d/%m/%Y %H:%M:%S.%f")]
-                        row.append(voltage_now)
-                        row.append(current_now)
-                        row.append(energy)
-                        row.append(interval_secs)
-                        row.append(interval_energy)
-                        logfile.writerow(row)
-
-
               time.sleep(delay)
 
 
