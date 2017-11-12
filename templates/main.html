@@ -1,0 +1,32 @@
+<!DOCTYPE HTML PUBLIC "-//SoftQuad//DTD HoTMetaL PRO 4.0::19971010::extensions to HTML 4.0//EN"
+ "hmpro4.dtd">
+
+<HTML>
+  
+  <HEAD>
+    <TITLE>{{ title }}</TITLE>
+    <LINK REL="stylesheet" TYPE="text/css" 
+    HREF="{{ url_for('static', filename='style.css') }}">
+     <META HTTP-EQUIV="refresh" CONTENT="1">
+ </HEAD>
+  
+  <BODY>
+    
+    <H1>{{ title }}</H1>
+    
+    <P>Current time is: {{ time }}</P>
+    <H3>State: {{ state }}</H3>
+
+    <FORM METHOD="post" ACTION="/">
+    
+
+    <BUTTON NAME="State" VALUE="Start" STYLE="width:35%" CLASS="buttong">Start</BUTTON>
+    <BUTTON NAME="State" VALUE="Stop" STYLE="width:35%" CLASS="buttonr">Stop</BUTTON>
+
+</FORM>
+    
+    <H3>Turn off</H3>
+    
+    <P><A HREF="\confirm">Shutdown</A></P>
+  </BODY>
+</HTML>
