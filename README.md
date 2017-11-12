@@ -32,6 +32,10 @@ See wiki.
 
 ## Changelog
 
+### V1.0
+
+Added CSV logging of results.
+
 ### V0.4
 
 Added control of relay.
