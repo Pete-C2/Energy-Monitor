@@ -3,7 +3,6 @@
 Battery energy monitor/discharger
 """
  
-import spidev
 import time
 from flask import Flask, render_template, request
 import datetime
@@ -12,28 +11,36 @@ import csv
 import RPi.GPIO as GPIO
 import threading
 
+from MCP3208 import MCP3208, MCP3208Error
+
 
 app = Flask(__name__)
 
 # Define Variables
 delay = 1.0
 
+# ADC connections
+cs_pin = 31
+clock_pin = 23
+data_out_pin = 19
+data_in_pin = 21
+
 # Voltage Monitoring
 voltage_channel = 0
-RgndV = 180 #ohms - Resistor from channel 0 to ground
+RgndV = 220 #ohms - Resistor from channel 0 to ground
 RfeedV = 1000 #ohms - Resistor from channel 0 to positive battery terminal
-Vref = 3.3 #volts
-Vcalibration = 12.65 #V measured for 12V input. Set same as Vin to remove calibration
+Vref = 3.0 #volts
+Vcalibration = 12.12 #V measured for 12V input. Set same as Vin to remove calibration
 Vin = 12 #V for calibration
 
 
 # Current Monitoring
 current_channel = 1
-RgndI = 3900 #ohms - Resistor from channel 1 to ground
-RfeedI = 1800 #ohms - Resistor from channel 1 to ACS712 Vout
+RgndI = 10000 #ohms - Resistor from channel 1 to ground
+RfeedI = 4700 #ohms - Resistor from channel 1 to ACS712 Vout
 sensitivity = 185 #mV/A ACS712x05B
 zero_current = 2.5 #V
-Icalibration = 1.45 #V measured for 1.5A load. Set same as Iin to remove calibration
+Icalibration = 1.5 #V measured for 1.5A load. Set same as Iin to remove calibration
 Iin = 1.5 #V for calibration
 
 # Battery Discharge
@@ -41,8 +48,8 @@ minimum_battery_voltage = 10.8 #V - Lead Acid 12V battery
 energy = 0 #Ah
 
 # Relay
-relay_pin = 16 # Header pin number
-GPIO.setmode(GPIO.BCM)
+relay_pin = 40 # Header pin number for load control relay
+GPIO.setmode(GPIO.BOARD)
 GPIO.setup(relay_pin, GPIO.OUT)
 GPIO.output(relay_pin, GPIO.LOW)
 
@@ -57,21 +64,17 @@ log_file = "Yes" # Yes to log to a CSV file. Any other value to not log
 dir = os.path.dirname(os.path.abspath(__file__))
 
 # Create SPI
-spi = spidev.SpiDev()
-spi.open(0, 0)
+MCP3208_ADC = MCP3208(cs_pin, clock_pin, data_in_pin, data_out_pin, GPIO.BOARD)
 
 def readadc(adcnum):
-    # read SPI data from the MCP3008, 8 channels in total
-    if adcnum > 7 or adcnum < 0:
-        return -1
-    r = spi.xfer2([1, 8 + adcnum << 4, 0])
-    data = ((r[1] & 3) << 8) + r[2]
+    # read SPI data from the MCP3208, 8 channels in total
+    data = MCP3208_ADC.get(adcnum)
     return data
 
 def voltage():
     # Measure the voltage
     voltage_value = readadc(voltage_channel)
-    measured_voltage = voltage_value * Vref / 1024
+    measured_voltage = voltage_value * Vref / 4096
     voltage = measured_voltage * (RgndV + RfeedV) / RgndV * Vin / Vcalibration
     return voltage
 
@@ -79,7 +82,7 @@ def current():
      # Measure the current
      global zero_current
      current_value = readadc(current_channel)
-     current_voltage = current_value * Vref / 1024
+     current_voltage = current_value * Vref / 4096
      ACS = current_voltage * (RgndI + RfeedI) / RgndI
      if status == "Off":
          zero_current=ACS
