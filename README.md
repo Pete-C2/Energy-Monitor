@@ -33,6 +33,10 @@ See wiki.
 
 ## Changelog
 
+### V2.1
+
+Added hardware test routine
+
 ### V2.0
 
 Modified for new hardware.

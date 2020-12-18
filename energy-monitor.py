@@ -7,14 +7,118 @@ import time
 from flask import Flask, render_template, request
 import datetime
 import os
+import sys
 import csv
 import RPi.GPIO as GPIO
 import threading
 
 from MCP3208 import MCP3208, MCP3208Error
 
+# Functions to read hardware
 
-app = Flask(__name__)
+def readadc(adcnum):
+    # read SPI data from the MCP3208, 8 channels in total
+    data = MCP3208_ADC.get(adcnum)
+    return data
+
+def voltage():
+    # Measure the voltage
+    voltage_value = readadc(voltage_channel)
+    measured_voltage = voltage_value * Vref / 4096
+    voltage = measured_voltage * (RgndV + RfeedV) / RgndV * Vin / Vcalibration
+    return voltage
+
+def current():
+     # Measure the current
+     global zero_current
+     current_value = readadc(current_channel)
+     current_voltage = current_value * Vref / 4096
+     ACS = current_voltage * (RgndI + RfeedI) / RgndI
+     if status == "Off":
+         zero_current=ACS
+     current_offset = ACS - zero_current
+     current = current_offset * 1000 / sensitivity * Iin / Icalibration
+     return current
+
+
+# Test the hardware
+
+
+def hardware_test():
+     global status
+     global zero_current
+
+     test_wait = 4 # Number of seconds between each state change
+     print("Hardware test.")
+     print("Both relays open - expect the voltage to be 0V")
+     print("Voltage = " + "{:-.2f}".format(voltage()) + "V")
+     time.sleep(test_wait)
+     print("")
+     
+     print("Connecting battery...")
+     GPIO.output(battery_relay_pin, GPIO.HIGH)
+     time.sleep(test_wait)
+     print("Battery voltage = " + "{:-.2f}".format(voltage()) + "V")
+     time.sleep(test_wait)
+     print("")
+     
+     print("Disconnecting battery...")
+     GPIO.output(battery_relay_pin, GPIO.LOW)
+     time.sleep(test_wait)
+     print("")
+
+     print("Connecting load...")
+     GPIO.output(load_relay_pin, GPIO.HIGH)
+     time.sleep(test_wait)
+     print("Load voltage = " + "{:-.2f}".format(voltage()) + "V")
+     time.sleep(test_wait)
+     print("")
+     
+     print("Disconnecting load...")
+     GPIO.output(load_relay_pin, GPIO.LOW)
+     time.sleep(test_wait)
+     print("")
+
+     print("Calibrating zero current...")
+     print("The result should be 0.00A!")
+     print("Zero current = " + "{:-.2f}".format(current()) + "A")
+     time.sleep(test_wait)
+     print("")
+
+     print("Connecting battery to load...")
+     GPIO.output(battery_relay_pin, GPIO.HIGH)
+     GPIO.output(load_relay_pin, GPIO.HIGH)
+     status = "On"
+     time.sleep(test_wait)
+     print("")
+
+     print("Measuring load current...")
+     print("Load current = " + "{:-.2f}".format(current()) + "A")
+     print("Voltage = " + "{:-.2f}".format(voltage()) + "V")
+     time.sleep(test_wait)
+     print("")
+
+     print("Disconnecting battery from load...")
+     GPIO.output(battery_relay_pin, GPIO.LOW)
+     GPIO.output(load_relay_pin, GPIO.LOW)
+     status = "Off"
+     time.sleep(test_wait)
+     print("")
+
+
+app = Flask(__name__) # Start webpage
+
+# Initialisation
+test_hardware = "Disabled"
+
+# Read any command line parameters
+
+total = len(sys.argv)
+cmdargs = str(sys.argv)
+for i in range(total):
+     if (str(sys.argv[i]) == "--test-hardware"):
+          test_hardware = "Enabled"
+
 
 # Define Variables
 delay = 1.0
@@ -48,10 +152,13 @@ minimum_battery_voltage = 10.8 #V - Lead Acid 12V battery
 energy = 0 #Ah
 
 # Relay
-relay_pin = 40 # Header pin number for load control relay
+load_relay_pin = 38 # Header pin number for load control relay
+battery_relay_pin = 40 # Header pin number for battery control relay
 GPIO.setmode(GPIO.BOARD)
-GPIO.setup(relay_pin, GPIO.OUT)
-GPIO.output(relay_pin, GPIO.LOW)
+GPIO.setup(load_relay_pin, GPIO.OUT)
+GPIO.output(load_relay_pin, GPIO.LOW)
+GPIO.setup(battery_relay_pin, GPIO.OUT)
+GPIO.output(battery_relay_pin, GPIO.LOW)
 
 # Display
 title = "Battery energy monitor"
@@ -66,29 +173,13 @@ dir = os.path.dirname(os.path.abspath(__file__))
 # Create SPI
 MCP3208_ADC = MCP3208(cs_pin, clock_pin, data_in_pin, data_out_pin, GPIO.BOARD)
 
-def readadc(adcnum):
-    # read SPI data from the MCP3208, 8 channels in total
-    data = MCP3208_ADC.get(adcnum)
-    return data
+if (test_hardware == "Enabled"):
+     hardware_test()
 
-def voltage():
-    # Measure the voltage
-    voltage_value = readadc(voltage_channel)
-    measured_voltage = voltage_value * Vref / 4096
-    voltage = measured_voltage * (RgndV + RfeedV) / RgndV * Vin / Vcalibration
-    return voltage
+     GPIO.cleanup()
+     exit()
 
-def current():
-     # Measure the current
-     global zero_current
-     current_value = readadc(current_channel)
-     current_voltage = current_value * Vref / 4096
-     ACS = current_voltage * (RgndI + RfeedI) / RgndI
-     if status == "Off":
-         zero_current=ACS
-     current_offset = ACS - zero_current
-     current = current_offset * 1000 / sensitivity * Iin / Icalibration
-     return current
+
 
 # Flask web page code
 
@@ -126,13 +217,13 @@ def log_button():
                if (status == "Off"):
                     if voltage() > minimum_battery_voltage:
                         status = "On"
-                        GPIO.output(relay_pin, GPIO.HIGH)
+                        GPIO.output(load_relay_pin, GPIO.HIGH)
                         EnergyThread().start()
                      
           if submitted_value =="Stop":   
                if (status == "On"):
                     status = "Off"
-                    GPIO.output(relay_pin, GPIO.LOW)
+                    GPIO.output(load_relay_pin, GPIO.LOW)
      return index()
 
 @app.route('/confirm')
@@ -206,7 +297,7 @@ class EnergyThread ( threading.Thread ):
               voltage_now = voltage()
               if voltage_now < minimum_battery_voltage:
                   status = "Off"
-                  GPIO.output(relay_pin, GPIO.LOW)
+                  GPIO.output(load_relay_pin, GPIO.LOW)
               if log_file == "Yes":
                   with open(filename, 'ab') as csvfile:
                         logfile = csv.writer(csvfile, delimiter=',', quotechar='"')
