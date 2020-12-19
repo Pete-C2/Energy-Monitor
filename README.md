@@ -33,6 +33,10 @@ See wiki.
 
 ## Changelog
 
+### V2.2
+
+Added calibration and checking routines
+
 ### V2.1
 
 Added hardware test routine

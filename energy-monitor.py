@@ -31,7 +31,28 @@ def voltage():
 def current():
      # Measure the current
      global zero_current
-     current_value = readadc(current_channel)
+     number_of_measurements = 10
+     sum_measurements = 0
+     for i in range(0,number_of_measurements):
+         measured_value = readadc(current_channel)
+         if (debug):
+                 print("Measurement = " + "{0:d}".format(measured_value))
+         sum_measurements = sum_measurements + measured_value
+         if (i == 0):
+             min_value = measured_value
+             max_value = measured_value
+         else:
+             if (measured_value > max_value):
+                 max_value = measured_value
+             if (measured_value < min_value):
+                 min_value = measured_value
+     current_value = sum_measurements/number_of_measurements
+     if (debug):
+         print("Average = " + "{0:d}".format(current_value))
+         print("Accuracy = +" + "{:-.2f}".format((float(max_value)/current_value - 1)*100)
+               + "%, -" + "{:-.2f}".format((float(current_value)/min_value - 1)*100) + "%")
+         print("{:-.4f}".format(float(max_value)/current_value), "{:-.4f}".format(float(min_value)/current_value))
+         print("Min = " + "{:-.2f}".format(min_value) + ", Max = " + "{:-.2f}".format(max_value))
      current_voltage = current_value * Vref / 4096
      ACS = current_voltage * (RgndI + RfeedI) / RgndI
      if status == "Off":
@@ -50,6 +71,7 @@ def hardware_test():
 
      test_wait = 4 # Number of seconds between each state change
      print("Hardware test.")
+     time.sleep(1)
      print("Both relays open - expect the voltage to be 0V")
      print("Voltage = " + "{:-.2f}".format(voltage()) + "V")
      time.sleep(test_wait)
@@ -105,11 +127,98 @@ def hardware_test():
      time.sleep(test_wait)
      print("")
 
+def calibrate_voltage():
+     global status
+     global zero_current
+     global Vcalibration
 
+     test_wait = 1 # Number of seconds between each state change
+     print("Calibrate voltage.")
+     Vcalibration = Vin
+     print("Connect voltage to battery input.")
+     GPIO.output(battery_relay_pin, GPIO.HIGH)
+     time.sleep(test_wait)
+     while(1):
+         print("Measured voltage = " + "{:-.2f}".format(voltage()) + "V")
+         time.sleep(test_wait)
+
+def check_zero():
+     global status
+     global zero_current
+     GPIO.output(load_relay_pin, GPIO.LOW)
+     time.sleep(2)
+     test_zero_current = current() # Check zero current
+     print("Zero current = " + "{:-.3f}".format(test_zero_current) + "A")
+     status = "Off"
+     test_zero_current = current() # Recalibrate zero current
+     GPIO.output(load_relay_pin, GPIO.HIGH)
+     status = "On"
+     time.sleep(4) # Longer wait to let eveything settle down
+     
+
+def calibrate_current():
+     global status
+     global zero_current
+     global Icalibration
+
+     test_wait = 1 # Number of seconds between each state change
+     print("Calibrate current.")
+     Icalibration = Iin
+     print("Connect voltage to battery input and load to load output.")
+     GPIO.output(battery_relay_pin, GPIO.HIGH)
+     time.sleep(2)
+     test_zero_current = current() # Calibrate zero current
+     print("Zero current = " + "{:-.2f}".format(test_zero_current) + "A")
+     GPIO.output(load_relay_pin, GPIO.HIGH)
+     status = "On"
+     time.sleep(4) # Longer wait to let eveything settle down
+     measurements = 0
+     sum_measurements = 0
+     while(1):
+         measured_current = current()
+         sum_measurements = sum_measurements + measured_current
+         measurements = measurements + 1
+         average_current = sum_measurements / measurements
+         print("Measured current = " + "{:-.3f}".format(measured_current) + "A, "
+               + "Average current = " + "{:-.3f}".format(average_current) + "A, "
+               + "No. of measurements = " + "{0:d}".format(measurements))
+         time.sleep(test_wait)
+         if (measurements % 25 == 0):
+             check_zero()
+
+def measure_test():
+     global status
+     global zero_current
+     global Icalibration
+
+
+     test_wait = 1 # Number of seconds between each state change
+     print("Test measurements.")
+     print("Connect voltage to battery input and load to load output.")
+     GPIO.output(battery_relay_pin, GPIO.HIGH)
+     time.sleep(test_wait)
+     test_zero_current = current() # Calibrate zero current
+     print("Zero current = " + "{:-.2f}".format(test_zero_current) + "A")
+     GPIO.output(load_relay_pin, GPIO.HIGH)
+     status = "On"
+     measurements = 0
+     time.sleep(test_wait)
+     while(1):
+         print("Measured current = " + "{:-.3f}".format(current())
+               + "A at measured voltage = " + "{:-.3f}".format(voltage()) + "V")
+         measurements = measurements + 1
+         time.sleep(test_wait)
+         if (measurements % 25 == 0):
+             check_zero()
+     
 app = Flask(__name__) # Start webpage
 
 # Initialisation
 test_hardware = "Disabled"
+test_measurement = "Disabled"
+calibrate_V = "Disabled"
+calibrate_I = "Disabled"
+debug = False # True = print debug messages; False = don't print
 
 # Read any command line parameters
 
@@ -118,6 +227,12 @@ cmdargs = str(sys.argv)
 for i in range(total):
      if (str(sys.argv[i]) == "--test-hardware"):
           test_hardware = "Enabled"
+     if (str(sys.argv[i]) == "--test-measurement"):
+          test_measurement = "Enabled"
+     if (str(sys.argv[i]) == "--calibrate-V"):
+          calibrate_V = "Enabled"
+     if (str(sys.argv[i]) == "--calibrate-I"):
+          calibrate_I = "Enabled"
 
 
 # Define Variables
@@ -134,7 +249,7 @@ voltage_channel = 0
 RgndV = 220 #ohms - Resistor from channel 0 to ground
 RfeedV = 1000 #ohms - Resistor from channel 0 to positive battery terminal
 Vref = 3.0 #volts
-Vcalibration = 12.12 #V measured for 12V input. Set same as Vin to remove calibration
+Vcalibration = 12.13 #V measured for 12V input. Set same as Vin to remove calibration
 Vin = 12 #V for calibration
 
 
@@ -144,8 +259,8 @@ RgndI = 10000 #ohms - Resistor from channel 1 to ground
 RfeedI = 4700 #ohms - Resistor from channel 1 to ACS712 Vout
 sensitivity = 185 #mV/A ACS712x05B
 zero_current = 2.5 #V
-Icalibration = 1.5 #V measured for 1.5A load. Set same as Iin to remove calibration
-Iin = 1.5 #V for calibration
+Icalibration = 1.500 #A measured for 1.5A load. Set same as Iin to remove calibration
+Iin = 1.744 #A for calibration
 
 # Battery Discharge
 minimum_battery_voltage = 10.8 #V - Lead Acid 12V battery
@@ -179,7 +294,26 @@ if (test_hardware == "Enabled"):
      GPIO.cleanup()
      exit()
 
+if (calibrate_V == "Enabled"):
+     calibrate_voltage()
 
+     GPIO.cleanup()
+     exit()
+
+if (calibrate_I == "Enabled"):
+     calibrate_current()
+
+     GPIO.cleanup()
+     exit()
+
+if (test_measurement == "Enabled"):
+     measure_test()
+
+     GPIO.cleanup()
+     exit()
+     
+# Connect battery
+GPIO.output(battery_relay_pin, GPIO.HIGH)
 
 # Flask web page code
 
