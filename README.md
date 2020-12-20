@@ -33,6 +33,10 @@ See wiki.
 
 ## Changelog
 
+### V3.0
+
+Added basic charging control
+
 ### V2.2
 
 Added calibration and checking routines

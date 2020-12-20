@@ -371,6 +371,49 @@ def monitor():
                      }
      return render_template('monitor.html', **templateData)
 
+@app.route('/charger', methods=['POST', 'GET'])
+def charger():
+     global title
+     global status
+     global zero_current
+    
+     now = datetime.datetime.now()
+     timeString = now.strftime("%H:%M on %d-%m-%Y")
+     
+     if request.method == 'POST':
+          # Get the value from the submitted form  
+          submitted_value = request.form['State']
+          if submitted_value == "Start":
+               if (status == "Off"):
+                   status = "On"
+                   GPIO.output(load_relay_pin, GPIO.HIGH)
+                   ChargeThread().start()
+                     
+          if submitted_value =="Stop":   
+               if (status == "On"):
+                    status = "Off"
+                    GPIO.output(load_relay_pin, GPIO.LOW)
+         
+     if status == "On":
+          state = "Charging"
+          voltage_type = "Charge"
+     else:
+          state = "Inactive"
+          voltage_type = "Battery"
+
+     
+          
+     templateData = {
+                     'title' : title + ' - Charger',
+                     'time': timeString,
+                     'state' : state,
+                     'type' : voltage_type,
+                     'voltage' : '{:-.2f}'.format(voltage()),
+                     'current' : '{:-.2f}'.format(-current()),
+                     'energy' : '{:-.4f}'.format(energy),
+                     'duration' : (duration)   # '{:%Y-%m-%d %H:%M:%S}'.format
+                     }
+     return render_template('charger.html', **templateData)
 
     
 @app.route('/confirm')
@@ -459,6 +502,66 @@ class EnergyThread ( threading.Thread ):
 
               time.sleep(delay)
 
+class ChargeThread ( threading.Thread ):
+
+     def run ( self ):
+          global status
+          global energy
+          global duration
+          
+          # Work out how much energy the battery has accepted.
+          # Cut-off charge when complete
+
+          # This is virtually identical to EnergyThread so it might be worthwhile
+          # extracting commmon functionality
+          
+          start = datetime.datetime.now()
+          if log_file == "Yes":
+              filetime = start.strftime("%Y-%m-%d-%H-%M")
+              filename=dir+'/logging/'+filetime+'_energy_log.csv'
+              with open(filename, 'ab') as csvfile:
+                   # Create a header row in a CSV file
+                   logfile = csv.writer(csvfile, delimiter=',', quotechar='"')
+                   row = ["Date-Time"] # Key parameters from web display
+                   row.append("Voltage")
+                   row.append("Current")
+                   row.append("Energy")
+                   row.append("Interval") # Diagnostics
+                   row.append("Interval Energy")
+                   logfile.writerow(row)
+
+          energy = 0 # Reset the energy count each time
+          last = start # Start the interval time count
+          time.sleep(delay)
+
+          while status == "On":
+              # Calculate the cumulative energy
+              now = datetime.datetime.now()
+              interval = now-last
+              interval_secs = interval.total_seconds() # Work out how long since the last measurement
+              current_now = -current() # Negative as current monitor measures current into load
+              interval_energy = current_now * interval_secs / 3600
+              energy = energy + interval_energy # Add the energy (ampere-hours) since in the last interval
+
+              duration = now-start # Work out how long the discharge has been going
+              last = now
+              voltage_now = voltage()
+              if voltage_now < minimum_battery_voltage:
+                  status = "Off"
+                  GPIO.output(load_relay_pin, GPIO.LOW)
+              if log_file == "Yes":
+                  with open(filename, 'ab') as csvfile:
+                        logfile = csv.writer(csvfile, delimiter=',', quotechar='"')
+                        row = [now.strftime("%d/%m/%Y %H:%M:%S.%f")]
+                        row.append(voltage_now)
+                        row.append(current_now)
+                        row.append(energy)
+                        row.append(interval_secs)
+                        row.append(interval_energy)
+                        logfile.writerow(row)
+
+
+              time.sleep(delay)
 
 if __name__ == '__main__':
      app.run(debug=True, host='0.0.0.0')
