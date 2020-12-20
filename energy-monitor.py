@@ -320,30 +320,27 @@ GPIO.output(battery_relay_pin, GPIO.HIGH)
 @app.route('/')
 def index():
      global title
+    
+     now = datetime.datetime.now()
+     timeString = now.strftime("%H:%M on %d-%m-%Y")
+         
+     templateData = {
+                     'title' : title,
+                     'time': timeString,
+                     }
+     return render_template('main.html', **templateData)
+    
+
+
+@app.route('/monitor', methods=['POST', 'GET'])
+def monitor():
+     global title
      global status
      global zero_current
     
      now = datetime.datetime.now()
      timeString = now.strftime("%H:%M on %d-%m-%Y")
-         
-     if status == "On":
-          state = "Discharging"
-     else:
-          state = "Inactive"
-     templateData = {
-                     'title' : title,
-                     'time': timeString,
-                     'state' : state,
-                     'voltage' : '{:-.2f}'.format(voltage()),
-                     'current' : '{:-.2f}'.format(current()),
-                     'energy' : '{:-.4f}'.format(energy),
-                     'duration' : (duration)   # '{:%Y-%m-%d %H:%M:%S}'.format
-                     }
-     return render_template('main.html', **templateData)
-
-@app.route("/", methods=['POST'])   # Seems to be run regardless of which page the post comes from
-def log_button():
-     global status
+     
      if request.method == 'POST':
           # Get the value from the submitted form  
           submitted_value = request.form['State']
@@ -358,8 +355,24 @@ def log_button():
                if (status == "On"):
                     status = "Off"
                     GPIO.output(load_relay_pin, GPIO.LOW)
-     return index()
+         
+     if status == "On":
+          state = "Discharging"
+     else:
+          state = "Inactive"
+     templateData = {
+                     'title' : title,
+                     'time': timeString,
+                     'state' : state,
+                     'voltage' : '{:-.2f}'.format(voltage()),
+                     'current' : '{:-.2f}'.format(current()),
+                     'energy' : '{:-.4f}'.format(energy),
+                     'duration' : (duration)   # '{:%Y-%m-%d %H:%M:%S}'.format
+                     }
+     return render_template('monitor.html', **templateData)
 
+
+    
 @app.route('/confirm')
 def confirm():
      templateData = {
