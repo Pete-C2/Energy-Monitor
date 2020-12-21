@@ -33,6 +33,18 @@ See wiki.
 
 ## Changelog
 
+### V3.2
+
+Added lead-acid cut-off on time
+
+### V3.1
+
+Added lead-acid cut-off on full charge
+
+### V3.0
+
+Added basic charging control
+
 ### V2.2
 
 Added calibration and checking routines
