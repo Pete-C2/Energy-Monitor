@@ -33,6 +33,10 @@ See wiki.
 
 ## Changelog
 
+### V3.2
+
+Added lead-acid cut-off on time
+
 ### V3.1
 
 Added lead-acid cut-off on full charge

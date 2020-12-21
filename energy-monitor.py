@@ -266,6 +266,13 @@ Iin = 1.744 #A for calibration
 minimum_battery_voltage = 10.8 #V - Lead Acid 12V battery
 energy = 0 #Ah
 
+# Battery Charge
+capacity = 12 # Ah
+full_charge_percent = 0.03 # 3% of capacity
+full_charge_time = 12 # hours
+# https://batteryuniversity.com/learn/article/charging_the_lead_acid_battery
+
+
 # Relay
 load_relay_pin = 38 # Header pin number for load control relay
 battery_relay_pin = 40 # Header pin number for battery control relay
@@ -320,6 +327,11 @@ GPIO.output(battery_relay_pin, GPIO.HIGH)
 @app.route('/')
 def index():
      global title
+     global energy
+     global duration
+
+     energy = 0
+     duration = 0
     
      now = datetime.datetime.now()
      timeString = now.strftime("%H:%M on %d-%m-%Y")
@@ -520,11 +532,9 @@ class ChargeThread ( threading.Thread ):
 
           # Initial functionality is only for 12V Lead Acid
 
-          capacity = 12 # Ah
-          full_charge_percent = 0.03 # 3% of capacity
-          # https://batteryuniversity.com/learn/article/charging_the_lead_acid_battery
           
           full_charge = capacity * full_charge_percent # A at full charge
+          full_charge_interval = full_charge_time * 60 * 60 # seconds
           start = datetime.datetime.now()
           if log_file == "Yes":
               filetime = start.strftime("%Y-%m-%d-%H-%M")
@@ -556,7 +566,7 @@ class ChargeThread ( threading.Thread ):
               duration = now-start # Work out how long the discharge has been going
               last = now
               voltage_now = voltage()
-              if current_now < full_charge:
+              if ((current_now < full_charge) or (duration.total_seconds() > full_charge_interval)):
                   status = "Off"
                   GPIO.output(load_relay_pin, GPIO.LOW)
               if log_file == "Yes":
