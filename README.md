@@ -1,5 +1,5 @@
 # Energy-Monitor
-Energy monitor to determine DC energy. This will be used to calculate the capacity of a battery and stop discharge at the end of battery life.
+Energy monitor to determine DC energy. This will be used to calculate the capacity of a battery and stop discharge at the end of battery life or to calculate the energy supplied to a battery and stop charge when either the current reduces or a pre-determined time is reached.
 
 Requires:
 - The [GPIO Library](https://code.google.com/p/raspberry-gpio-python/) (Already on most Raspberry Pi OS builds).
