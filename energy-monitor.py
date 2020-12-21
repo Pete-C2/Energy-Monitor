@@ -397,11 +397,14 @@ def charger():
      if status == "On":
           state = "Charging"
           voltage_type = "Charge"
+
      else:
           state = "Inactive"
           voltage_type = "Battery"
 
-     
+     display_current = '{:-.2f}'.format(-current())
+     if (display_current == "-0.00"):
+          display_current = "0.00"
           
      templateData = {
                      'title' : title + ' - Charger',
@@ -409,7 +412,7 @@ def charger():
                      'state' : state,
                      'type' : voltage_type,
                      'voltage' : '{:-.2f}'.format(voltage()),
-                     'current' : '{:-.2f}'.format(-current()),
+                     'current' : display_current,
                      'energy' : '{:-.4f}'.format(energy),
                      'duration' : (duration)   # '{:%Y-%m-%d %H:%M:%S}'.format
                      }
@@ -514,7 +517,14 @@ class ChargeThread ( threading.Thread ):
 
           # This is virtually identical to EnergyThread so it might be worthwhile
           # extracting commmon functionality
+
+          # Initial functionality is only for 12V Lead Acid
+
+          capacity = 12 # Ah
+          full_charge_percent = 0.03 # 3% of capacity
+          # https://batteryuniversity.com/learn/article/charging_the_lead_acid_battery
           
+          full_charge = capacity * full_charge_percent # A at full charge
           start = datetime.datetime.now()
           if log_file == "Yes":
               filetime = start.strftime("%Y-%m-%d-%H-%M")
@@ -546,7 +556,7 @@ class ChargeThread ( threading.Thread ):
               duration = now-start # Work out how long the discharge has been going
               last = now
               voltage_now = voltage()
-              if voltage_now < minimum_battery_voltage:
+              if current_now < full_charge:
                   status = "Off"
                   GPIO.output(load_relay_pin, GPIO.LOW)
               if log_file == "Yes":
